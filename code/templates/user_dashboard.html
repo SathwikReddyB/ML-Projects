@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.15'%3E%3Cpath d='M8 40a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-24a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM24 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 24a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 960px;
+            margin-top: 4rem;
+            padding: 2rem;
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .input-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .btn-primary:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .alert-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .alert-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .hidden {
+            display: none;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1 class="text-3xl font-bold mb-4 text-center">User Dashboard</h1>
+            <p class="text-gray-600 mb-6 text-center">Enter EEG data (178 comma-separated values) to get a seizure prediction.</p>
+            <div class="input-group">
+                <label for="eeg-data">EEG Data:</label>
+                <textarea id="eeg-data" rows="8" placeholder="e.g., 1, 2, 3, 4, ..."></textarea>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="predict-btn" class="btn btn-primary flex-1">Get Prediction</button>
+                <div id="loading-indicator" class="hidden loading-spinner"></div>
+            </div>
+            <div id="prediction-result" class="alert mt-4 hidden" role="alert"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const predictBtn = document.getElementById('predict-btn');
+            const eegDataInput = document.getElementById('eeg-data');
+            const predictionResult = document.getElementById('prediction-result');
+            const loadingIndicator = document.getElementById('loading-indicator');
+
+            predictBtn.addEventListener('click', async () => {
+                const eegData = eegDataInput.value;
+                const dataArray = eegData.split(',').map(val => parseFloat(val.trim()));
+
+                predictionResult.classList.add('hidden'); // Hide previous result
+                predictBtn.disabled = true;
+                predictBtn.textContent = 'Predicting...';
+                loadingIndicator.classList.remove('hidden');
+
+                if (dataArray.length !== 178 || dataArray.some(isNaN)) {
+                    displayPredictionResult("Error: Please enter exactly 178 comma-separated numerical values.", 'error');
+                    predictBtn.textContent = 'Get Prediction';
+                    predictBtn.disabled = false;
+                    loadingIndicator.classList.add('hidden');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eeg_data: dataArray }),
+                    });
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        if (result.prediction === 1) {
+                            displayPredictionResult("Prediction: Epileptic Seizure detected.", 'error');
+                        } else {
+                            displayPredictionResult("Prediction: No seizure detected.", 'success');
+                        }
+                    } else {
+                        displayPredictionResult(result.error || "Prediction failed.", 'error');
+                    }
+                } catch (error) {
+                    displayPredictionResult("An error occurred during prediction.", 'error');
+                    console.error("Prediction error:", error);
+                } finally {
+                    predictBtn.textContent = 'Get Prediction';
+                    predictBtn.disabled = false;
+                    loadingIndicator.classList.add('hidden');
+                }
+            });
+
+            // Function to display prediction results
+            function displayPredictionResult(message, type) {
+                predictionResult.textContent = message;
+                predictionResult.className = `alert mt-4 ${type === 'success' ? 'alert-success' : 'alert-error'}`;
+                predictionResult.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
